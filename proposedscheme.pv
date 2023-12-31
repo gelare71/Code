@@ -1,0 +1,141 @@
+
+(*** Secure and Efficient Three-Factor Authentication Protocol ***)
+
+(* Channel definition *)
+(* Note that defining several channels makes the implementation more readable *)
+free VE_VS_sh: channel [private]. (* private channel between the vehicle and vehicle server *)
+free R_VS_sh: channel [private]. (* private channel between the vehicle server and rsu *)
+free VE_R_ch: channel. (* public channel between the vehicle  and rsu *)
+free R_VS_ch: channel. (* public channel between the vehicle server  and rsu *)
+free c : channel. (* a general public channel *)
+
+(* Private Terms *)
+free IDi : bitstring [private].
+free PWi : bitstring [private].
+free Bi : bitstring [private].
+free Kvs : bitstring [private].
+free IDs : bitstring [private].
+free SSkey_vs : bitstring [private].
+free SSkey_r : bitstring [private].
+free SSkey_v : bitstring [private].
+table t(bitstring).
+table d(bitstring).
+
+(* Public Terms *)
+
+free IDj : bitstring.
+
+(* Functions or constructors *)
+fun xor(bitstring, bitstring) : bitstring. (* its destructor is xor *)
+fun h(bitstring) : bitstring.
+fun con(bitstring, bitstring) : bitstring.
+fun Gen(bitstring): bitstring.
+fun Rep(bitstring, bitstring): bitstring.
+fun SymEnc(bitstring, bitstring) : bitstring. (* its destructor is SymDec *)
+
+(* Destructors *)
+equation forall m1 : bitstring, m2 : bitstring; xor (xor(m1, m2), m2) = m1.
+reduc forall m : bitstring, key : bitstring; SymDec(SymEnc(m, key), key) = m.
+
+(* queries *)
+(* the following query indicates the security of established session key*)
+query attacker (SSkey_v).
+query attacker (SSkey_vs).
+query attacker (SSkey_r).
+(* this query indicates the anonymity of vehicle user *)
+noninterf IDi.
+(* this query indicates the resistance of protocol against the "password guessing attack" *)
+weaksecret PWi.
+(* the following queries indicate the resistance of protocol against the "replay attack and impersonation attack" *)
+query id : bitstring; inj-event (VAuth(id)) ==> inj-event (VStart(id)).
+query id : bitstring; inj-event (RAuth(id)) ==> inj-event (RStart(id)).
+
+
+(* Events *)
+event VStart(bitstring).
+event VAuth(bitstring).
+event RStart(bitstring).
+event RAuth(bitstring).
+
+let pVehicle =
+new Randi : bitstring;
+let PIDi = h(con(IDi,con(PWi, Randi))) in
+out (VE_VS_sh, (IDi,PIDi));
+in (VE_VS_sh, Ai : bitstring);
+let (a: bitstring, b: bitstring) = Gen(Bi) in
+let B1 = xor(h(con(PWi,con(IDi,a))),Randi) in
+let B2 = h(con(PWi,con(IDi,Randi))) in
+let B3 = xor(h(con(Randi,a)),Ai) in
+!(event VStart(IDi);
+let xa = Rep (Bi,b) in
+let xRandi = xor(h(con(PWi,con(IDi,xa))),B1) in
+let xB2 = h(con(PWi,con(IDi,xRandi))) in
+if (xB2 = B2) then
+let Ai' = xor(h(con(xRandi,xa)),B3) in
+new ri : bitstring;
+new ti : bitstring;
+let Mi2 = xor(h(con(Ai',con(ti,PIDi))),ri) in
+let Mi1 = h(con(Ai',con(IDi,con(ti,ri)))) in
+out (VE_R_ch, (Mi1,Mi2,PIDi,ti));
+in (VE_R_ch, (xVSK : bitstring, xVSV : bitstring, xtjn : bitstring));
+let PIDni = h(con(PIDi,ri)) in
+let (SSkeyV : bitstring, xAni : bitstring) = SymDec(xVSK,Ai') in
+out (c ,SymEnc(SSkey_v,SSkeyV));
+let xxVSV = h(con(SSkeyV, xtjn)) in
+if (xVSV = xxVSV) then
+0).
+
+let pRSU =
+in (R_VS_sh, Kj : bitstring);
+!(in (VE_R_ch, (xMi1 : bitstring, xMi2 : bitstring, xPIDi : bitstring, xti : bitstring));
+event RStart(IDj);
+new tj : bitstring;
+new rj : bitstring;
+let Mj1 = SymEnc(con(rj,tj),Kj) in
+let Mj2 = h(con(xMi1,con(xMi2,con(tj,con(rj,IDj))))) in
+out (R_VS_ch, (Mj1,Mj2,tj,IDj,xMi1,xMi2,xPIDi,xti));
+in (R_VS_ch, (xRSK : bitstring, xVSK : bitstring, xRSV : bitstring, xtvs : bitstring));
+let SSkeyR = SymDec(xRSK,Kj) in
+out(c,SymEnc(SSkey_r,SSkeyR));
+let xxRSV = h(con(SSkeyR,xtvs)) in
+if (xRSV = xxRSV) then
+new tjn : bitstring;
+let VSV = h(con(SSkeyR,tjn)) in
+out (VE_R_ch,(VSV,tjn,xVSK));
+0).
+
+let PVehicleServer =
+in (VE_VS_sh, (PIDi : bitstring, IDi: bitstring));
+new gi : bitstring;
+let Ai = h(con(IDs,con(gi,con(Kvs,PIDi)))) in
+insert t((IDi,gi,PIDi));
+out (VE_VS_sh, Ai);
+new si : bitstring;
+let Kj = h(con(IDs,con(si,con(Kvs,IDj)))) in
+insert d((IDj,Kj));
+out (R_VS_sh, Kj);
+in (R_VS_ch, (xMj1 : bitstring, xMj2 : bitstring, xtj : bitstring, xMi1 : bitstring ,xMi2 : bitstring, xPIDi : bitstring, xti : bitstring, xIDj : bitstring));
+get d((=xIDj,Kj':bitstring)) in
+let (xrj : bitstring, xxtj : bitstring) = SymDec(xMj1,Kj') in
+let xxMj2 = h(con(xMi1,con(xMi2,con(xxtj,con(xrj,xIDj))))) in
+if (xMj2 = xxMj2) then
+event RAuth(IDj);
+get t((=xPIDi,gi':bitstring,IDi':bitstring)) in
+let xri = xor(h(con(h(con(IDs,con(gi',con(Kvs,xPIDi)))),con(xti,xPIDi))),xMi2) in
+let xxMi1 = h(con(h(con(IDs,con(gi',con(Kvs,xPIDi)))),con(IDi',con(xti,xri)))) in
+if (xMi1 = xxMi1) then
+event VAuth(IDi);
+new tvs : bitstring;
+new rvs : bitstring;
+let PIDni = h(con(xPIDi,xri)) in
+let Ani = h(con(IDs,con(rvs,con(Kvs,PIDni)))) in
+let SSkeyVS = h(con(xri,con(xrj,con(rvs,con(Ani,Kj'))))) in
+out(c,SymEnc(SSkey_vs,SSkeyVS));
+let RSK = SymEnc(SSkeyVS,Kj') in
+let VSK =  SymEnc(con(SSkeyVS,Ani), h(con(IDs,con(gi',con(Kvs,xPIDi))))) in
+let RSV = h(con(SSkeyVS,tvs)) in
+out (R_VS_ch, (RSK,VSK,RSV,tvs)).
+
+
+process
+( (!PVehicleServer) | (!pRSU) | (!pVehicle) )
