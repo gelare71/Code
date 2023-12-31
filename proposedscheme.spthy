@@ -1,0 +1,174 @@
+theory ProposedScheme
+begin
+
+builtins:  symmetric-encryption,hashing,xor
+
+rule Setup:
+    []
+    --[Once('Setup')]->
+    [!Entity($VS, $R, $Veh)]
+
+rule Key_Gnerator:
+  let
+  A_v = h(<~ID_S, ~g, ~K_VS, ~PID>)
+  K_j = h(<~ID_S, ~s, ~K_VS, ~ID_j>)
+
+  in
+	[!Entity($VS, $R, $Veh),
+  Fr(~ID_S), Fr(~g), Fr(~K_VS), Fr(~PID), Fr(~s), Fr(~ID_j),Fr(~ID_V),Fr(~tid)]
+
+        --[ Once('Init'), Neq(~s, ~g), Secure(A_v),Secure(K_j)]->
+
+  [ VS_Init(~tid, <$VS,~ID_S,~K_VS>,<$Veh, A_v, ~PID, ~ID_V>, <$R,~ID_j,K_j>),
+  Veh_Init(~tid,$R, $Veh, A_v, ~PID, ~ID_V,$VS),
+  R_init(~tid,$VS, $R, K_j, ~ID_j)]
+
+  rule Veh_1:
+  let
+   m_1 = ~r_i XOR h(<A_v,~t1,PID>)
+   m_2 = h(<A_v,~t1,ID_V,~r_i>)
+   m_i = <m_1,m_2,~t1,PID>
+  in
+	[Veh_Init(tid,$R, $Veh, A_v, PID, ID_V,$VS),Fr(~r_i), Fr(~t1)
+	]
+	--[Secret1(~r_i), Running($Veh,$VS,<'Veh','VS',~r_i>)]->
+	[Out(m_i),
+	St_Veh_1(tid, $R, $Veh, A_v, PID, ID_V, ~r_i,$VS)]
+
+rule RSU_1:
+let
+m_i = <m_1,m_2,PID,t1>
+m_j = senc(<~r_j,~t_j>,K_j)
+m_j2 = h(<m_1,m_2,~t_j,ID_j,~r_j>)
+m_3 = <m_j,m_1,m_j2,m_2,PID,t1,~t_j,ID_j>
+in
+[In(m_i), Fr(~t_j), Fr(~r_j), R_init(tid,$VS, $R, K_j, ID_j)]
+--[Secret2(~r_j), Running($R,$VS,<'R','VS',m_j2>)]->
+[Out(m_3), St_R_1(tid,$VS, $R, K_j, ID_j, ~r_j)]
+
+rule VS_1:
+let
+m_3 = <m_1,m_2,m_j2,PID,t1,senc(<r_j_prime,t_j>,K_j),t_j,ID_j>
+r_i_prime = m_1 XOR h(<A_v,t1,PID>)
+m_2_prime = h(<A_v,t1,ID_V,r_i_prime>)
+m_j2_prime= h(<m_1,m_2,t_j,ID_j,r_j_prime>)
+PID_new = h(<PID,r_i_prime>)
+A_v_new = h(<ID_S, ~r_vs, K_VS, PID_new>)
+SK = h(<r_i_prime,r_j_prime,~r_vs,A_v_new,K_j>)
+RSK = senc(SK,K_j)
+VSK = senc(<SK,A_v_new>,A_v)
+RSV = h(<SK,~t_3>)
+m_4 = <VSK,RSV,RSK,~t_3>
+   in
+[In(m_3), Fr(~t_3), Fr(~r_vs), VS_Init(tid, <$VS,ID_S,K_VS>, <$Veh, A_v, PID, ID_V>, <$R,ID_j,K_j>)]
+--[Secret3(SK), Secret4(~r_vs), Eq(m_2,m_2_prime), Eq(m_j2,m_j2_prime), Commit($VS, $Veh,<'VS','Veh',r_i_prime>), Commit($VS, $R,<'VS','R',m_j2_prime>), Running($VS,$R,<'VS','R',SK>)]->
+[Out(m_4), St_VS(tid, <$VS,SK>,<$Veh,A_v_new,PID_new>,$R)]
+
+rule RSU_2:
+let
+m_4 = <senc(SK,K_j),VSK,RSV,t_3>
+RSVR = h(<SK,t_3>)
+VSV = h(<SK,~t4>)
+in
+[In(m_4), Fr(~t4), St_R_1(tid,$VS, $R, K_j, ID_j, r_j)]
+--[Secret5(SK), SendR(), Eq(RSV,RSVR), Commit($R,$VS,<'R','VS',SK>), Running($R,$Veh,<'R','Veh',SK>)]->
+[Out(<VSV,VSK,~t4>), St_R_2(tid,$VS, $R,SK)]
+
+rule Veh_2:
+	let
+	m_5 = <senc(<SK_V,A_v_new>,A_v),VSV,t4>
+  PID_new = h(<PID,r_i>)
+  VSVV = h(<SK_V,t4>)
+	in
+	[
+		In(m_5),
+		St_Veh_1(tid, $R, $Veh, A_v, PID, ID_V, r_i,$VS)
+	]
+	--[ Eq(VSV,VSVV),
+		Secret6(SK_V),
+		Commit($Veh,$VS,<'Veh','VS',SK_V>),
+		RecieveV()
+	]->
+
+	[St_Veh_2(tid, $R, $Veh, A_v_new, PID_new,$VS)]
+
+
+  restriction Nequality:
+  "All x y #i. Neq(x,y) @i ==> not(x = y)
+  "
+  restriction Once:
+  "All tag #i #j. Once(tag)@i & Once(tag)@j ==> #i = #j"
+
+  restriction Equality:
+  "
+      All x y #i. Eq(x,y) @i ==> x = y
+
+  "
+restriction Enrollment_is_secure:
+"not(Ex m #i #j. Secure(m) @ #i & K(m) @ #j)"
+
+lemma nounce_Veh_Secrecy:
+                      "
+    All   r #i. Secret1(r) @i
+              ==> not (Ex #j. K(r) @j)"
+
+lemma nounce_RSU_Secrecy:
+        "
+    All   r #i. Secret2(r) @i
+                ==> not (Ex #j. K(r) @j)"
+
+  lemma nounce_VS_Secrecy:
+                        "
+    All   r #i. Secret4(r) @i
+    ==> not (Ex #j. K(r) @j)"
+
+
+lemma SK_RSU_Secrecy:
+        "
+    All   Key #i. Secret5(Key) @i
+                ==> not (Ex #j. K(Key) @j)"
+
+lemma SK_VS_Secrecy:
+        "
+    All   Key #i. Secret3(Key) @i
+                ==> not (Ex #j. K(Key) @j)"
+
+
+lemma SK_V_Secrecy:
+  "
+  All Key #i. Secret6(Key) @i
+    ==> not (Ex #j. K(Key) @j) "
+
+
+lemma VS_injective_agreement_on_ri:
+                      "
+    All Veh VS m #i. Commit(VS,Veh, <'VS','Veh',m>) @i
+      ==> (Ex #j. Running(Veh, VS, <'Veh','VS',m>) @j  & j < i
+        & not (Ex Veh2 VS2 #i2. Commit(VS2,Veh2, <'VS','Veh',m>) @i2 & not(#i2 = #i)))"
+
+lemma VS_injective_agreement_on_rj:
+                  "
+All R VS m #i. Commit(VS,R, <'VS','R',m>) @i
+  ==> (Ex #j. Running(R, VS, <'R','VS',m>) @j  & j < i
+    & not (Ex R2 VS2 #i2. Commit(VS2,R2, <'VS','R',m>) @i2 & not(#i2 = #i)))"
+
+lemma R_injective_agreement_on_SK:
+                      "
+  All R VS m #i. Commit(R,VS, <'R','VS',m>) @i
+      ==> (Ex #j. Running(VS,R, <'VS','R',m>) @j  & j < i
+        & not (Ex R2 VS2 #i2. Commit(R2,VS2, <'R','VS',m>) @i2 & not(#i2 = #i)))"
+
+lemma VS_injective_agreement_on_SK:
+                              "
+  All Veh R m #i. Commit(Veh,R, <'Veh','R',m>) @i
+    ==> (Ex #j. Running(R,Veh, <'R','Veh',m>) @j  & j < i
+                & not (Ex Veh2 R2 #i2. Commit(Veh2,R2,<'Veh','R',m>) @i2 & not(#i2 = #i)))"
+
+
+  lemma executable: exists-trace
+"Ex #i #j.
+SendR() @i & RecieveV() @j & i < j"
+
+
+
+  end
