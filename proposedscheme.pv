@@ -1,5 +1,5 @@
 
-(*** Secure and Efficient Three-Factor Authentication Protocol ***)
+
 
 (* Channel definition *)
 (* Note that defining several channels makes the implementation more readable *)
