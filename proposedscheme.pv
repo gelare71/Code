@@ -76,7 +76,7 @@ in (ch, (xVSK : bitstring, xVSV : bitstring, xtvs : bitstring));
 let PIDni = h(con(PIDi,ri)) in
 let (SSkeyV : bitstring, xAni : bitstring) = SymDec(xVSK,Ai') in
 out (ch ,SymEnc(SSkey_v,SSkeyV));
-let xxVSV = h(con(SSkeyV,con(ri,con(xAni,con(PIDni,xtvs))))) in
+let xxVSV = h(con(SSkeyV,con(ri,con(Ai',con(PIDni,con(IDi,xtvs)))))) in
 if (xVSV = xxVSV) then
 0).
 
@@ -92,7 +92,7 @@ out (ch, (Mj1,Mj2,tj,IDj,xMi1,xMi2,xPIDi,xti));
 in (ch, (xRSK : bitstring, xVSK : bitstring, xRSV : bitstring, xVSV : bitstring, xtvs : bitstring));
 let (SSkeyR : bitstring, xKjn : bitstring)= SymDec(xRSK,Kj) in
 out(ch,SymEnc(SSkey_r,SSkeyR));
-let xxRSV = h(con(SSkeyR,con(rj,con(xKjn,xtvs)))) in
+let xxRSV = h(con(SSkeyR,con(rj,con(xKjn,con(IDj,xtvs))))) in
 if (xRSV = xxRSV) then
 new tjn : bitstring;
 out (ch,(xVSV,tjn,xVSK,xtvs));
@@ -124,12 +124,12 @@ new rvs : bitstring;
 let PIDni = h(con(xPIDi,xri)) in
 let Ani = h(con(Kvs,con(rvs,IDi'))) in
 let Kjn = h(con(Kvs,con(rvs,xIDj))) in
-let SSkeyVS = h(con(xri,con(xrj,con(rvs,con(Ani,Kjn))))) in
+let SSkeyVS = h(con(xri,con(xrj,con(rvs,con(h(con(Kvs,con(rvi',IDi'))),Kj'))))) in
 out(ch,SymEnc(SSkey_vs,SSkeyVS));
 let RSK = SymEnc(con(SSkeyVS,Kjn),Kj') in
 let VSK =  SymEnc(con(SSkeyVS,Ani), h(con(Kvs,con(rvi',IDi')))) in
-let RSV = h(con(SSkeyVS,con(xrj,con(Kjn,tvs)))) in
-let VSV = h(con(SSkeyVS,con(xri,con(Ani,con(PIDni,tvs))))) in
+let RSV = h(con(SSkeyVS,con(xrj,con(Kjn,con(xIDj,tvs))))) in
+let VSV = h(con(SSkeyVS,con(xri,con(h(con(Kvs,con(rvi',IDi'))),con(PIDni,con(IDi',tvs)))))) in
 out (ch, (RSK,VSK,RSV,VSV,tvs)).
 
 
