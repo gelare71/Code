@@ -1,3 +1,4 @@
+
 theory ProposedScheme
 begin
 
@@ -10,16 +11,16 @@ rule Setup:
 
 rule Key_Gnerator:
   let
-  A_v = h(<~ID_S, ~g, ~K_VS, ~PID>)
-  K_j = h(<~ID_S, ~s, ~K_VS, ~ID_j>)
+  A_v = h(<~K_VS,~g,~ID_V>)
+  K_j = h(<~K_VS,~s,~ID_j>)
 
   in
 	[!Entity($VS, $R, $Veh),
-  Fr(~ID_S), Fr(~g), Fr(~K_VS), Fr(~PID), Fr(~s), Fr(~ID_j),Fr(~ID_V),Fr(~tid)]
+ Fr(~g), Fr(~K_VS), Fr(~PID), Fr(~s), Fr(~ID_j),Fr(~ID_V),Fr(~tid)]
 
         --[ Once('Init'), Neq(~s, ~g), Secure(A_v),Secure(K_j)]->
 
-  [ VS_Init(~tid, <$VS,~ID_S,~K_VS>,<$Veh, A_v, ~PID, ~ID_V>, <$R,~ID_j,K_j>),
+  [ VS_Init(~tid, <$VS,~K_VS>,<$Veh, A_v, ~PID, ~ID_V>, <$R,~ID_j,K_j>),
   Veh_Init(~tid,$R, $Veh, A_v, ~PID, ~ID_V,$VS),
   R_init(~tid,$VS, $R, K_j, ~ID_j)]
 
@@ -43,7 +44,7 @@ m_j2 = h(<m_1,m_2,~t_j,ID_j,~r_j>)
 m_3 = <m_j,m_1,m_j2,m_2,PID,t1,~t_j,ID_j>
 in
 [In(m_i), Fr(~t_j), Fr(~r_j), R_init(tid,$VS, $R, K_j, ID_j)]
---[Secret2(~r_j), Running($R,$VS,<'R','VS',m_j2>)]->
+--[Secret2(~r_j), Running($R,$VS,<'R','VS',~r_j>)]->
 [Out(m_3), St_R_1(tid,$VS, $R, K_j, ID_j, ~r_j)]
 
 rule VS_1:
@@ -53,32 +54,35 @@ r_i_prime = m_1 XOR h(<A_v,t1,PID>)
 m_2_prime = h(<A_v,t1,ID_V,r_i_prime>)
 m_j2_prime= h(<m_1,m_2,t_j,ID_j,r_j_prime>)
 PID_new = h(<PID,r_i_prime>)
-A_v_new = h(<ID_S, ~r_vs, K_VS, PID_new>)
-SK = h(<r_i_prime,r_j_prime,~r_vs,A_v_new,K_j>)
+A_v_new = h(<K_VS,~r_vs, ID_V>)
+K_j_new = h(<K_VS,~r_vs, ID_j>)
+SK = h(<r_i_prime,r_j_prime,~r_vs,A_v,K_j>)
 RSK = senc(SK,K_j)
+RSKp = senc(K_j_new,K_j)
 VSK = senc(<SK,A_v_new>,A_v)
-RSV = h(<SK,~t_3>)
-m_4 = <VSK,RSV,RSK,~t_3>
+RSV = h(<SK,r_j_prime,K_j,ID_j,~t_3>)
+VSV = h(<SK,r_i_prime,A_v,ID_V,~t_3>)
+m_4 = <VSK,RSV,RSK,RSKp,VSV,~t_3>
    in
-[In(m_3), Fr(~t_3), Fr(~r_vs), VS_Init(tid, <$VS,ID_S,K_VS>, <$Veh, A_v, PID, ID_V>, <$R,ID_j,K_j>)]
---[Secret3(SK), Secret4(~r_vs), Eq(m_2,m_2_prime), Eq(m_j2,m_j2_prime), Commit($VS, $Veh,<'VS','Veh',r_i_prime>), Commit($VS, $R,<'VS','R',m_j2_prime>), Running($VS,$R,<'VS','R',SK>)]->
-[Out(m_4), St_VS(tid, <$VS,SK>,<$Veh,A_v_new,PID_new>,$R)]
+[In(m_3), Fr(~t_3), Fr(~r_vs), VS_Init(tid, <$VS,K_VS>, <$Veh, A_v, PID, ID_V>, <$R,ID_j,K_j>)]
+--[Secret3(SK), Secret4(~r_vs), Eq(m_2,m_2_prime), Eq(m_j2,m_j2_prime), Commit($VS, $Veh,<'VS','Veh',r_i_prime>), Commit($VS, $R,<'VS','R',r_j_prime>), Running($VS,$R,<'VS','R',SK>), Running($VS,$Veh,<'VS','Veh',SK>)]->
+[Out(m_4), St_VS(tid, <$VS,SK>,<$Veh,A_v_new,PID_new>,<$R,K_j_new>)]
 
 rule RSU_2:
 let
-m_4 = <senc(SK,K_j),VSK,RSV,t_3>
-RSVR = h(<SK,t_3>)
-VSV = h(<SK,~t4>)
+m_4 = <senc(SK_R,K_j),senc(K_j_new,K_j),VSK,RSV,VSV,t_3>
+RSVR = h(<SK_R,r_j,K_j,ID_j,t_3>)
+
 in
 [In(m_4), Fr(~t4), St_R_1(tid,$VS, $R, K_j, ID_j, r_j)]
---[Secret5(SK), SendR(), Eq(RSV,RSVR), Commit($R,$VS,<'R','VS',SK>), Running($R,$Veh,<'R','Veh',SK>)]->
-[Out(<VSV,VSK,~t4>), St_R_2(tid,$VS, $R,SK)]
+--[Secret5(SK_R), SendR(), Eq(RSV,RSVR), Commit($R,$VS,<'R','VS',SK_R>)]->
+[Out(<VSV,VSK,~t4,t_3>), St_R_2(tid,$VS,$R,SK_R,K_j_new)]
 
 rule Veh_2:
 	let
-	m_5 = <senc(<SK_V,A_v_new>,A_v),VSV,t4>
+	m_5 = <senc(<SK_V,A_v_new>,A_v),VSV,t4,t_3>
   PID_new = h(<PID,r_i>)
-  VSVV = h(<SK_V,t4>)
+  VSVV = h(<SK_V,r_i,A_v,ID_V,t_3>)
 	in
 	[
 		In(m_5),
@@ -158,11 +162,11 @@ lemma R_injective_agreement_on_SK:
       ==> (Ex #j. Running(VS,R, <'VS','R',m>) @j  & j < i
         & not (Ex R2 VS2 #i2. Commit(R2,VS2, <'R','VS',m>) @i2 & not(#i2 = #i)))"
 
-lemma VS_injective_agreement_on_SK:
+lemma Veh_injective_agreement_on_SK:
                               "
-  All Veh R m #i. Commit(Veh,R, <'Veh','R',m>) @i
-    ==> (Ex #j. Running(R,Veh, <'R','Veh',m>) @j  & j < i
-                & not (Ex Veh2 R2 #i2. Commit(Veh2,R2,<'Veh','R',m>) @i2 & not(#i2 = #i)))"
+  All Veh VS m #i. Commit(Veh,VS, <'Veh','VS',m>) @i
+    ==> (Ex #j. Running(VS,Veh, <'VS','Veh',m>) @j  & j < i
+                & not (Ex Veh2 VS2 #i2. Commit(Veh2,VS2,<'Veh','VS',m>) @i2 & not(#i2 = #i)))"
 
 
   lemma executable: exists-trace
